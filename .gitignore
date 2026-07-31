@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+
+# 기기별 로컬 설정 (권한 허용 목록 등)
+.claude/settings.local.json

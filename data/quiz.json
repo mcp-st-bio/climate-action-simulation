@@ -1,0 +1,7 @@
+[
+  { "turn": 1, "question": "지구 평균 기온이 산업화 이전보다 1.5도 오르면 되돌릴 수 없는 기후 재앙이 시작될 수 있다.", "answer": true },
+  { "turn": 2, "question": "이산화탄소는 지구를 떠나지 않고 대기 중에 수백 년간 머무를 수 있다.", "answer": true },
+  { "turn": 3, "question": "화석연료 사용을 줄이면 경제 성장은 반드시 멈춘다.", "answer": false },
+  { "turn": 5, "question": "해수면 상승으로 국토 전체가 사라질 위기에 처한 나라는 없다.", "answer": false },
+  { "turn": 6, "question": "재생에너지로의 전환은 개별 국가가 아니라 국제 협력이 필요한 문제다.", "answer": true }
+]
