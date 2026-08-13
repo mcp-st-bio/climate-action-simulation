@@ -10,10 +10,11 @@ import { isRowNotFound } from "@/lib/supabase/errors";
 export async function GET(req: Request, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   const token = new URL(req.url).searchParams.get("token") ?? undefined;
+  const hostToken = new URL(req.url).searchParams.get("hostToken") ?? undefined;
 
   const { data, error } = await supabaseServer
     .from("rooms")
-    .select("state, previous_state")
+    .select("state, previous_state, host_token")
     .eq("code", code.toUpperCase())
     .single();
 
@@ -39,6 +40,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ code: st
   return NextResponse.json({
     state: withOwnChoice,
     canUndo: data.previous_state !== null,
+    isHost: typeof data.host_token === "string" && hostToken === data.host_token,
     serverNow: Date.now(),
   });
 }

@@ -44,16 +44,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
 
     // 판을 바꾸는 조작은 교사 기기만. host_token이 없는 방은 이 기능 도입 이전에
     // 만들어진 방이므로 그대로 허용한다.
-    if (HOST_ONLY_ACTIONS.has(action.type) && data.host_token) {
-      if (action.hostToken !== data.host_token) {
+    const currentState = data.state as RoomState;
+    const hasHostAuthority =
+      typeof data.host_token === "string" &&
+      data.host_token.length > 0 &&
+      action.hostToken === data.host_token;
+
+    // 방 코드와 교사용 주소는 공개될 수 있으므로, 판을 진행하는 조작은 비밀 토큰으로 검증한다.
+    if (HOST_ONLY_ACTIONS.has(action.type) && !hasHostAuthority) {
+      return NextResponse.json(
+        { error: "교사 기기에서만 할 수 있는 조작입니다." },
+        { status: 403 }
+      );
+    }
+
+    // 학생은 자신의 팀 토큰으로 점유한 국가만 선택하거나 능력을 요청할 수 있다.
+    if (
+      (action.type === "SET_DEV_CHOICE" || action.type === "REQUEST_ABILITY") &&
+      !hasHostAuthority
+    ) {
+      const teamToken = action.teamToken;
+      if (!teamToken || currentState.claims[action.countryId] !== teamToken) {
         return NextResponse.json(
-          { error: "교사 기기에서만 할 수 있는 조작입니다." },
+          { error: "자신이 선택한 국가만 조작할 수 있습니다." },
           { status: 403 }
         );
       }
     }
-
-    const currentState = data.state as RoomState;
 
     let nextState: RoomState;
     let nextPrevious: RoomState | null;

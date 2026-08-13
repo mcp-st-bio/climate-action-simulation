@@ -16,6 +16,7 @@ export function useRoom(code: string, teamToken?: string, hostToken?: string) {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
+  const [isHost, setIsHost] = useState<boolean | null>(null);
   // 태블릿 시계가 서버와 어긋나 있어도 카운트다운이 맞도록 보정값을 둔다.
   const [clockOffset, setClockOffset] = useState(0);
   const tokenRef = useRef(teamToken);
@@ -24,7 +25,10 @@ export function useRoom(code: string, teamToken?: string, hostToken?: string) {
   hostRef.current = hostToken;
 
   const refetch = useCallback(async () => {
-    const qs = tokenRef.current ? `?token=${encodeURIComponent(tokenRef.current)}` : "";
+    const params = new URLSearchParams();
+    if (tokenRef.current) params.set("token", tokenRef.current);
+    if (hostRef.current) params.set("hostToken", hostRef.current);
+    const qs = params.size > 0 ? `?${params.toString()}` : "";
     try {
       const res = await fetch(`/api/rooms/${code}${qs}`, { cache: "no-store" });
       if (res.status === 404) {
@@ -32,9 +36,10 @@ export function useRoom(code: string, teamToken?: string, hostToken?: string) {
         return;
       }
       if (!res.ok) throw new Error(String(res.status));
-      const { state: next, canUndo: undoable, serverNow } = await res.json();
+      const { state: next, canUndo: undoable, isHost: verifiedHost, serverNow } = await res.json();
       setState(next);
       setCanUndo(!!undoable);
+      setIsHost(!!verifiedHost);
       if (typeof serverNow === "number") setClockOffset(serverNow - Date.now());
       setError(null);
     } catch {
@@ -74,7 +79,7 @@ export function useRoom(code: string, teamToken?: string, hostToken?: string) {
 
   useEffect(() => {
     refetch();
-  }, [refetch]);
+  }, [refetch, hostToken]);
 
   useEffect(() => {
     const channel = supabaseBrowser
@@ -119,7 +124,7 @@ export function useRoom(code: string, teamToken?: string, hostToken?: string) {
     };
   }, [refetch]);
 
-  return { state, error, notFound, canUndo, clockOffset, dispatch, refetch, setError };
+  return { state, error, notFound, canUndo, isHost, clockOffset, dispatch, refetch, setError };
 }
 
 /**

@@ -68,6 +68,20 @@ export type RoomAction =
 
 /** 교사 기기 토큰이 있어야 실행되는 액션. 판을 바꾸거나 비밀 제출을 열람하는 조작들. */
 export const HOST_ONLY_ACTIONS: ReadonlySet<RoomAction["type"]> = new Set([
+  "REVEAL",
+  "DISMISS_ABILITY_REQUEST",
+  "KOREA_ABILITY",
+  "USA_ABILITY",
+  "SWEDEN_ABILITY",
+  "JAPAN_ABILITY",
+  "TUVALU_ABILITY",
+  "DENMARK_ABILITY",
+  "SET_UN_TARGET",
+  "APPLY_UN",
+  "GO_NEXT",
+  "TIMER_PAUSE",
+  "TIMER_RESUME",
+  "TIMER_RESET",
   "SET_GP",
   "SET_TEMPERATURE",
   "JUMP_PHASE",

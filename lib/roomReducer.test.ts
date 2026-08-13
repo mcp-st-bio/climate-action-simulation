@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRoomAction } from "./roomReducer";
+import { applyRoomAction, HOST_ONLY_ACTIONS } from "./roomReducer";
 import { createInitialRoomState, RoomState } from "./roomState";
 import { getPhaseSequence, isGameOver } from "./rules";
 import { getQuizForTurn } from "./quiz";
@@ -60,6 +60,26 @@ function playTurn(
   }
   return s;
 }
+
+describe("교사 전용 조작 경계", () => {
+  it("게임 진행과 판정에 영향을 주는 조작을 모두 교사 전용으로 분류한다", () => {
+    const teacherActions = [
+      "START_COUNTRY_SELECT", "START_GAME", "RESET_CONNECTIONS", "REVEAL",
+      "SUBMIT_QUIZ_ANSWER", "DISMISS_ABILITY_REQUEST", "KOREA_ABILITY",
+      "USA_ABILITY", "SWEDEN_ABILITY", "JAPAN_ABILITY", "TUVALU_ABILITY",
+      "DENMARK_ABILITY", "SET_UN_TARGET", "APPLY_UN", "GO_NEXT",
+      "TIMER_PAUSE", "TIMER_RESUME", "TIMER_RESET", "SET_GP",
+      "SET_TEMPERATURE", "JUMP_PHASE", "IMPORT_STATE", "UNDO", "RESET",
+    ] as const;
+    for (const action of teacherActions) expect(HOST_ONLY_ACTIONS.has(action)).toBe(true);
+  });
+
+  it("학생에게 필요한 네 가지 조작은 교사 전용 목록에 넣지 않는다", () => {
+    for (const action of ["JOIN_ROOM", "CLAIM_COUNTRY", "SET_DEV_CHOICE", "REQUEST_ABILITY"] as const) {
+      expect(HOST_ONLY_ACTIONS.has(action)).toBe(false);
+    }
+  });
+});
 
 describe("입장 준비 단계 (로비 → 국가 선택 → 진행)", () => {
   it("JOIN_ROOM은 태블릿을 등록하고, 새로고침해도 중복 집계하지 않는다", () => {

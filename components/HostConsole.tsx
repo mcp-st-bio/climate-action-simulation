@@ -27,7 +27,7 @@ type Dispatch = (action: RoomAction) => void | Promise<void>;
 
 export default function HostConsole({ code }: { code: string }) {
   const { hostToken, setHostToken, loaded: hostTokenLoaded } = useHostToken(code);
-  const { state, error, notFound, canUndo, dispatch } = useRoom(code, undefined, hostToken);
+  const { state, error, notFound, canUndo, isHost, dispatch } = useRoom(code, undefined, hostToken);
   const remaining = useCountdown(state?.timer);
 
   // 공개 전에는 서버가 선택 내용을 잘라내므로(비밀 제출), 교사가 대신 입력한 값만
@@ -47,6 +47,9 @@ export default function HostConsole({ code }: { code: string }) {
 
   if (notFound) return <Centered>방 코드 {code} 를 찾을 수 없습니다.</Centered>;
   if (!state) return <Centered>연결 중...</Centered>;
+  if (hostTokenLoaded && isHost === false) {
+    return <HostAccessGate code={code} onSubmit={setHostToken} />;
+  }
 
   const phase = getPhaseSequence(state.turn)[state.phaseIndex];
   const earthState = getEarthState(state.temperatureDeci);
@@ -681,6 +684,35 @@ function Centered({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <p className="text-xl font-bold text-slate-400">{children}</p>
+    </main>
+  );
+}
+
+function HostAccessGate({ code, onSubmit }: { code: string; onSubmit: (token: string) => void }) {
+  const [token, setToken] = useState("");
+  return (
+    <main className="flex min-h-screen items-center justify-center p-6">
+      <section className="w-full max-w-md space-y-4 rounded-xl border border-amber-800/60 bg-slate-900 p-6 text-center">
+        <h1 className="text-2xl font-black">교사 권한이 필요합니다</h1>
+        <p className="text-sm leading-relaxed text-slate-400">
+          방 코드 <strong className="text-slate-200">{code}</strong>의 교사용 주소입니다. 주소만으로는 게임을 조작할 수 없습니다.
+        </p>
+        <input
+          type="password"
+          value={token}
+          onChange={(event) => setToken(event.target.value.trim())}
+          placeholder="교사 권한 토큰"
+          className="w-full rounded-lg bg-slate-800 px-4 py-3"
+        />
+        <button
+          disabled={!token}
+          onClick={() => onSubmit(token)}
+          className="w-full rounded-lg bg-amber-700 px-4 py-3 font-bold hover:bg-amber-600 disabled:opacity-40"
+        >
+          교사 화면 열기
+        </button>
+        <a href={`/board/${code}`} className="block text-sm text-sky-300 underline">관전 화면으로 이동</a>
+      </section>
     </main>
   );
 }
