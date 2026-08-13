@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { PublicRoomState } from "@/lib/publicState";
-import { RoomAction } from "@/lib/roomReducer";
+import type { RoomAction } from "@/lib/roomReducer";
 import { RoomState } from "@/lib/roomState";
 import { PHASE_LABEL } from "@/lib/labels";
 import { CountryId, getPhaseSequence, toDisplayTemp } from "@/lib/rules";

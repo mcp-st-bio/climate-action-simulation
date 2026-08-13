@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import quizData from "@/data/quiz.json";
 import { useHostToken, useRoom } from "@/lib/useRoom";
 import SafetyPanel from "@/components/SafetyPanel";
+import QuizResult from "@/components/QuizResult";
 import { useCountdown, formatTime } from "@/lib/useCountdown";
 import { CHOICE_GP_LABEL, CHOICE_LABEL, PHASE_LABEL, nameOf } from "@/lib/labels";
-import { PublicRoomState } from "@/lib/publicState";
-import { RoomAction } from "@/lib/roomReducer";
+import type { PublicRoomState } from "@/lib/publicState";
+import type { RoomAction } from "@/lib/roomReducer";
 import {
   Country,
   CountryId,
@@ -22,13 +22,6 @@ import {
   getUnEvaluation,
   toDisplayTemp,
 } from "@/lib/rules";
-
-interface QuizItem {
-  turn: number;
-  question: string;
-  answer: boolean;
-}
-const QUIZ: QuizItem[] = quizData;
 
 type Dispatch = (action: RoomAction) => void | Promise<void>;
 
@@ -57,7 +50,6 @@ export default function HostConsole({ code }: { code: string }) {
 
   const phase = getPhaseSequence(state.turn)[state.phaseIndex];
   const earthState = getEarthState(state.temperatureDeci);
-  const quizItem = QUIZ.find((q) => q.turn === state.turn);
   const showFinal = state.gameOver || phase === "resource_distribution";
 
   function canGoNext(): boolean {
@@ -194,18 +186,16 @@ export default function HostConsole({ code }: { code: string }) {
               />
             )}
 
-            {phase === "quiz" && quizItem && (
+            {phase === "quiz" && state.quiz && (
               <div className="space-y-3">
-                <p className="text-lg">{quizItem.question}</p>
+                <p className="text-lg">{state.quiz.question}</p>
                 {state.quizJudged === null ? (
                   <div className="flex gap-3">
-                    <button onClick={() => dispatch({ type: "JUDGE_QUIZ", correct: true })} className="rounded-lg bg-emerald-700 px-6 py-3 text-lg font-bold hover:bg-emerald-600">O (학급 정답)</button>
-                    <button onClick={() => dispatch({ type: "JUDGE_QUIZ", correct: false })} className="rounded-lg bg-red-700 px-6 py-3 text-lg font-bold hover:bg-red-600">X (학급 오답)</button>
+                    <button onClick={() => dispatch({ type: "SUBMIT_QUIZ_ANSWER", answer: true })} className="rounded-lg bg-emerald-700 px-6 py-3 text-lg font-bold hover:bg-emerald-600">학급 답변: O</button>
+                    <button onClick={() => dispatch({ type: "SUBMIT_QUIZ_ANSWER", answer: false })} className="rounded-lg bg-red-700 px-6 py-3 text-lg font-bold hover:bg-red-600">학급 답변: X</button>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-400">
-                    판정 완료: {state.quizJudged ? "정답" : "오답"} (정답은 {quizItem.answer ? "O" : "X"})
-                  </p>
+                  <QuizResult quiz={state.quiz} />
                 )}
               </div>
             )}

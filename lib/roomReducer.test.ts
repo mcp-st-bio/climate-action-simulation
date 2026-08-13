@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyRoomAction } from "./roomReducer";
 import { createInitialRoomState, RoomState } from "./roomState";
 import { getPhaseSequence, isGameOver } from "./rules";
+import { getQuizForTurn } from "./quiz";
 
 /** 로비를 건너뛰고 바로 게임이 도는 상태로 만든다. */
 function playing(state = createInitialRoomState()): RoomState {
@@ -47,7 +48,11 @@ function playTurn(
   if (s.gameOver) return s;
   if (getPhaseSequence(turnNumber).includes("quiz")) {
     s = advanceToPhase(s, "quiz");
-    s = applyRoomAction(s, { type: "JUDGE_QUIZ", correct: quizCorrect });
+    const quiz = getQuizForTurn(turnNumber)!;
+    s = applyRoomAction(s, {
+      type: "SUBMIT_QUIZ_ANSWER",
+      answer: quizCorrect ? quiz.answer : !quiz.answer,
+    });
     if (s.gameOver) return s;
   }
   while (s.turn === turnNumber && !s.gameOver) {
@@ -117,7 +122,7 @@ describe("입장 준비 단계 (로비 → 국가 선택 → 진행)", () => {
     const state = createInitialRoomState();
     expect(applyRoomAction(state, { type: "GO_NEXT" })).toBe(state);
     expect(applyRoomAction(state, { type: "REVEAL" })).toBe(state);
-    expect(applyRoomAction(state, { type: "JUDGE_QUIZ", correct: true })).toBe(state);
+    expect(applyRoomAction(state, { type: "SUBMIT_QUIZ_ANSWER", answer: true })).toBe(state);
     expect(
       applyRoomAction(state, { type: "SET_DEV_CHOICE", countryId: "kor", choice: "economy" })
     ).toBe(state);
@@ -241,13 +246,13 @@ describe("roomReducer orchestration", () => {
     expect(again).toBe(state);
   });
 
-  it("JUDGE_QUIZ is a no-op once already judged this turn", () => {
+  it("SUBMIT_QUIZ_ANSWER compares the class answer and is a no-op once judged", () => {
     let state = setAllDevChoices(playing(), "balanced");
     state = applyRoomAction(state, { type: "REVEAL" });
     state = applyRoomAction(state, { type: "GO_NEXT" }); // -> quiz phase
-    state = applyRoomAction(state, { type: "JUDGE_QUIZ", correct: false });
+    state = applyRoomAction(state, { type: "SUBMIT_QUIZ_ANSWER", answer: true });
     const tempAfterFirst = state.temperatureDeci;
-    const again = applyRoomAction(state, { type: "JUDGE_QUIZ", correct: true });
+    const again = applyRoomAction(state, { type: "SUBMIT_QUIZ_ANSWER", answer: false });
     expect(again.temperatureDeci).toBe(tempAfterFirst);
     expect(again.quizJudged).toBe(false);
   });
@@ -261,7 +266,7 @@ describe("roomReducer orchestration", () => {
     expect(state.temperatureDeci).toBe(150 - 3);
   });
 
-  it("USA_ABILITY on non-turn-4 turns defers to pendingUsa, resolved at JUDGE_QUIZ", () => {
+  it("USA_ABILITY on non-turn-4 turns defers to pendingUsa, resolved with the quiz answer", () => {
     let state = playing();
     state = applyRoomAction(state, { type: "USA_ABILITY", countryId: "usa" });
     expect(state.pendingUsa).toBe(true);
@@ -271,7 +276,7 @@ describe("roomReducer orchestration", () => {
     state = applyRoomAction(state, { type: "REVEAL" });
     state = applyRoomAction(state, { type: "GO_NEXT" });
     const tempBeforeQuiz = state.temperatureDeci;
-    state = applyRoomAction(state, { type: "JUDGE_QUIZ", correct: true });
+    state = applyRoomAction(state, { type: "SUBMIT_QUIZ_ANSWER", answer: false });
     expect(state.pendingUsa).toBe(false);
     expect(state.temperatureDeci).toBe(tempBeforeQuiz - 5); // quiz(0) + ability(-0.5)
   });
@@ -306,7 +311,7 @@ describe("roomReducer orchestration", () => {
     let state = setAllDevChoices(playing(), "economy");
     state = applyRoomAction(state, { type: "REVEAL" });
     state = applyRoomAction(state, { type: "GO_NEXT" }); // quiz
-    state = applyRoomAction(state, { type: "JUDGE_QUIZ", correct: true });
+    state = applyRoomAction(state, { type: "SUBMIT_QUIZ_ANSWER", answer: false });
     state = applyRoomAction(state, { type: "GO_NEXT" }); // turn2 nation_consult
     state = applyRoomAction(state, { type: "GO_NEXT" }); // turn2 representative_meeting
 
@@ -352,7 +357,7 @@ describe("roomReducer orchestration", () => {
     state = applyRoomAction(state, { type: "REVEAL" });
     state = applyRoomAction(state, { type: "GO_NEXT" }); // -> quiz
     expect(getPhaseSequence(state.turn)[state.phaseIndex]).toBe("quiz");
-    state = applyRoomAction(state, { type: "JUDGE_QUIZ", correct: true });
+    state = applyRoomAction(state, { type: "SUBMIT_QUIZ_ANSWER", answer: false });
     state = applyRoomAction(state, { type: "GO_NEXT" }); // -> turn 2
     expect(state.turn).toBe(2);
     expect(state.revealed).toBe(false);

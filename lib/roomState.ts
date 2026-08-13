@@ -50,6 +50,8 @@ export interface RoomState {
   devChoices: Partial<Record<CountryId, DevChoice>>;
   previousTurnChoices: Partial<Record<CountryId, DevChoice>>;
   revealed: boolean;
+  /** 교사가 선택한 학급 답변. 정답과 비교하기 전의 원본 답변이다. */
+  quizAnswer: boolean | null;
   quizJudged: boolean | null;
   pendingUsa: boolean;
   pendingSweden: boolean;
@@ -86,6 +88,7 @@ export function createInitialRoomState(): RoomState {
     devChoices: {},
     previousTurnChoices: {},
     revealed: false,
+    quizAnswer: null,
     quizJudged: null,
     pendingUsa: false,
     pendingSweden: false,

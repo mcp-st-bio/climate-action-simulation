@@ -5,6 +5,7 @@ import { useRoom } from "@/lib/useRoom";
 import { useCountdown, formatTime } from "@/lib/useCountdown";
 import { getEarthBackground, getEarthCopy } from "@/lib/earthTheme";
 import { CHOICE_LABEL, PHASE_LABEL } from "@/lib/labels";
+import QuizResult from "@/components/QuizResult";
 import {
   computeFinalDistribution,
   getEarthState,
@@ -83,7 +84,7 @@ export default function BoardView({ code }: { code: string }) {
 
       {/* 기온: 화면 높이의 1/4 이상 (SPEC.md 11절) */}
       <div className="mt-6 text-center">
-        <div className="text-[30vh] font-black leading-none tabular-nums">
+        <div className={`${phase === "quiz" ? "text-[16vh]" : "text-[30vh]"} font-black leading-none tabular-nums`}>
           {toDisplayTemp(state.temperatureDeci).toFixed(1)}°
         </div>
         <div className="text-[5vh] font-bold">{earthState.name}</div>
@@ -92,7 +93,12 @@ export default function BoardView({ code }: { code: string }) {
         )}
       </div>
 
-      {showFinal ? (
+      {phase === "quiz" && state.quiz ? (
+        <section className="mx-auto mt-6 max-w-5xl space-y-5 rounded-2xl bg-black/25 p-6 text-center">
+          <div className="text-[4vh] font-bold leading-snug">{state.quiz.question}</div>
+          {state.quiz.isCorrect === null ? <p className="text-[2.5vh] opacity-70">학급 답변을 기다리고 있습니다.</p> : <QuizResult quiz={state.quiz} large />}
+        </section>
+      ) : showFinal ? (
         <section className="mx-auto mt-8 max-w-4xl">
           <h2 className="mb-4 text-center text-[4vh] font-black">
             {state.gameOver ? "지구의 멸망 — 게임 종료" : "최종 자원 배분"}

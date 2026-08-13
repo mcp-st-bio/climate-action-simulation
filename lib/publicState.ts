@@ -6,11 +6,21 @@
  * 누구나 /host 에도 들어올 수 있으므로, 교사 화면에도 똑같이 검열된 상태를 내려보낸다.
  * 교사는 "누가 제출했는지"만 알면 되고(미제출 조 대신 입력), 내용은 공개 시점에 함께 본다.
  */
-import { CountryId, DevChoice } from "@/lib/rules";
+import { CountryId, DevChoice, getPhaseSequence } from "@/lib/rules";
+import { getQuizForTurn, QuizSource } from "@/lib/quiz";
 import { RoomState } from "@/lib/roomState";
 
+export interface PublicQuizState {
+  question: string;
+  classAnswer: boolean | null;
+  correctAnswer: boolean | null;
+  isCorrect: boolean | null;
+  explanation: string | null;
+  sources: QuizSource[] | null;
+}
+
 export interface PublicRoomState
-  extends Omit<RoomState, "devChoices" | "claims" | "connectedTeams"> {
+  extends Omit<RoomState, "devChoices" | "claims" | "connectedTeams" | "quizAnswer"> {
   /** 공개 전에는 비어 있고(본인 국가 제외), 공개 후에는 6개국 전부 담긴다. */
   devChoices: Partial<Record<CountryId, DevChoice>>;
   /** 내용은 감추고 "누가 냈는지"만 노출한다 ("3/6 제출 완료" 표시용). */
@@ -25,6 +35,8 @@ export interface PublicRoomState
   expectedTeams: number;
   /** 이 조회를 보낸 태블릿이 로비에 등록되어 있는지. */
   meConnected: boolean;
+  /** 정답과 해설은 교사가 답을 제출한 뒤에만 공개한다. */
+  quiz: PublicQuizState | null;
 }
 
 export function toPublicState(
@@ -56,8 +68,23 @@ export function toPublicState(
     claims: _claims,
     devChoices: _raw,
     connectedTeams,
+    quizAnswer: _quizAnswer,
     ...rest
   } = state;
+
+  const phase = getPhaseSequence(state.turn)[state.phaseIndex];
+  const quizItem = phase === "quiz" ? getQuizForTurn(state.turn) : undefined;
+  const answered = state.quizJudged !== null;
+  const quiz: PublicQuizState | null = quizItem
+    ? {
+        question: quizItem.question,
+        classAnswer: answered ? (state.quizAnswer ?? null) : null,
+        correctAnswer: answered ? quizItem.answer : null,
+        isCorrect: answered ? state.quizJudged : null,
+        explanation: answered ? quizItem.explanation : null,
+        sources: answered ? quizItem.sources : null,
+      }
+    : null;
 
   return {
     ...rest,
@@ -70,5 +97,6 @@ export function toPublicState(
     connectedCount: connectedTeams.length,
     expectedTeams: state.countries.length,
     meConnected: viewer?.teamToken ? connectedTeams.includes(viewer.teamToken) : false,
+    quiz,
   };
 }

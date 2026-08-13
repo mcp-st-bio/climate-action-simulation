@@ -18,6 +18,25 @@ function withAllChoices(): RoomState {
 }
 
 describe("toPublicState — 비밀 제출 경계 (SPEC.md 4.1)", () => {
+  it("퀴즈 정답과 해설은 학급 답변 제출 뒤에만 공개한다", () => {
+    let state = withAllChoices();
+    state = applyRoomAction(state, { type: "REVEAL" });
+    state = applyRoomAction(state, { type: "GO_NEXT" });
+
+    const before = toPublicState(state);
+    expect(before.quiz?.question).toBeTruthy();
+    expect(before.quiz?.correctAnswer).toBeNull();
+    expect(before.quiz?.explanation).toBeNull();
+
+    state = applyRoomAction(state, { type: "SUBMIT_QUIZ_ANSWER", answer: false });
+    const after = toPublicState(state);
+    expect(after.quiz?.classAnswer).toBe(false);
+    expect(after.quiz?.correctAnswer).toBe(false);
+    expect(after.quiz?.isCorrect).toBe(true);
+    expect(after.quiz?.explanation).toBeTruthy();
+    expect(after.quiz?.sources?.length).toBeGreaterThan(0);
+    expect((after as unknown as Record<string, unknown>).quizAnswer).toBeUndefined();
+  });
   it("공개 전에는 어떤 조의 선택도 내보내지 않는다", () => {
     const state = withAllChoices();
     const pub = toPublicState(state);

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { PublicRoomState } from "@/lib/publicState";
-import { RoomAction } from "@/lib/roomReducer";
+import type { PublicRoomState } from "@/lib/publicState";
+import type { RoomAction } from "@/lib/roomReducer";
 
 /**
  * 방 상태 구독 훅. 세 화면(host/board/play)이 공유한다.

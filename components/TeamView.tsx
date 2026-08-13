@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRoom, useTeamToken } from "@/lib/useRoom";
 import { useCountdown, formatTime } from "@/lib/useCountdown";
 import { CHOICE_GP_LABEL, CHOICE_LABEL, PHASE_LABEL } from "@/lib/labels";
+import QuizResult from "@/components/QuizResult";
 import {
   CountryId,
   DevChoice,
@@ -174,7 +175,12 @@ export default function TeamView({ code }: { code: string }) {
           <p className="mt-1 text-sm text-slate-400">
             {phase === "nation_consult" && "조원끼리 이번 턴 전략을 상의하세요."}
             {phase === "representative_meeting" && "대표가 나와서 다른 나라와 협상하세요."}
-            {phase === "quiz" && "선생님이 내는 문제를 다 함께 맞혀보세요."}
+            {phase === "quiz" && state.quiz && (
+              <span className="block space-y-3">
+                <span className="block text-base font-semibold text-slate-100">{state.quiz.question}</span>
+                {state.quiz.isCorrect === null ? <span className="block">학급에서 O 또는 X를 정한 뒤 선생님의 입력을 기다리세요.</span> : <QuizResult quiz={state.quiz} />}
+              </span>
+            )}
             {phase === "un_conference" && "UN 환경보전회의가 진행 중입니다."}
             {phase === "resource_distribution" && "최종 자원을 배분하고 있습니다."}
           </p>

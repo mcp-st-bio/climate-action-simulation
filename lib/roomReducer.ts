@@ -33,6 +33,7 @@ import {
   timerRemainingSec,
 } from "@/lib/roomState";
 import { PHASE_LABEL } from "@/lib/labels";
+import { getQuizForTurn } from "@/lib/quiz";
 
 export type RoomAction =
   | { type: "JOIN_ROOM"; teamToken: string }
@@ -42,7 +43,7 @@ export type RoomAction =
   | { type: "CLAIM_COUNTRY"; countryId: CountryId; teamToken: string }
   | { type: "SET_DEV_CHOICE"; countryId: CountryId; choice: DevChoice }
   | { type: "REVEAL" }
-  | { type: "JUDGE_QUIZ"; correct: boolean }
+  | { type: "SUBMIT_QUIZ_ANSWER"; answer: boolean }
   | { type: "REQUEST_ABILITY"; countryId: CountryId }
   | { type: "DISMISS_ABILITY_REQUEST"; countryId: CountryId }
   | { type: "KOREA_ABILITY"; countryId: CountryId; loserId: CountryId }
@@ -76,12 +77,13 @@ export const HOST_ONLY_ACTIONS: ReadonlySet<RoomAction["type"]> = new Set([
   "START_COUNTRY_SELECT",
   "START_GAME",
   "RESET_CONNECTIONS",
+  "SUBMIT_QUIZ_ANSWER",
 ]);
 
 /** 되돌리기 스냅샷을 남길 액션. 태블릿에서 쏟아지는 잡음(선점·제출·요청)은 제외한다. */
 export const UNDOABLE_ACTIONS: ReadonlySet<RoomAction["type"]> = new Set([
   "REVEAL",
-  "JUDGE_QUIZ",
+  "SUBMIT_QUIZ_ANSWER",
   "KOREA_ABILITY",
   "USA_ABILITY",
   "SWEDEN_ABILITY",
@@ -103,7 +105,7 @@ export const UNDOABLE_ACTIONS: ReadonlySet<RoomAction["type"]> = new Set([
 const PLAYING_ONLY_ACTIONS: ReadonlySet<RoomAction["type"]> = new Set([
   "SET_DEV_CHOICE",
   "REVEAL",
-  "JUDGE_QUIZ",
+  "SUBMIT_QUIZ_ANSWER",
   "REQUEST_ABILITY",
   "KOREA_ABILITY",
   "USA_ABILITY",
@@ -379,9 +381,12 @@ export function applyRoomAction(state: RoomState, action: RoomAction): RoomState
       return changeTemperature(base, tempDelta, "개발선택+능력 반영 기온 변화");
     }
 
-    case "JUDGE_QUIZ": {
+    case "SUBMIT_QUIZ_ANSWER": {
       if (state.quizJudged !== null) return state;
-      const { correct } = action;
+      const phase = getPhaseSequence(state.turn)[state.phaseIndex];
+      const quiz = getQuizForTurn(state.turn);
+      if (phase !== "quiz" || !quiz) return state;
+      const correct = action.answer === quiz.answer;
       let tempDelta = getQuizTempDelta(correct);
       let log = [`퀴즈 판정: ${correct ? "정답 (기온 유지)" : "오답 (+0.1)"}`, ...state.log];
       if (state.pendingUsa) {
@@ -389,7 +394,13 @@ export function applyRoomAction(state: RoomState, action: RoomAction): RoomState
         tempDelta += usaDelta;
         log = [`CCS기술 판정: ${correct ? "-0.5 적용" : "효과 없음 (오답)"}`, ...log];
       }
-      const base: RoomState = { ...state, quizJudged: correct, pendingUsa: false, log };
+      const base: RoomState = {
+        ...state,
+        quizAnswer: action.answer,
+        quizJudged: correct,
+        pendingUsa: false,
+        log,
+      };
       return changeTemperature(base, tempDelta, "퀴즈 반영 기온 변화");
     }
 
@@ -491,6 +502,7 @@ export function applyRoomAction(state: RoomState, action: RoomAction): RoomState
         phaseIndex: 0,
         devChoices: {},
         revealed: false,
+        quizAnswer: null,
         quizJudged: null,
         pendingUsa: false,
         pendingSweden: false,
