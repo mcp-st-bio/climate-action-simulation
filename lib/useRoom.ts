@@ -55,7 +55,9 @@ export function useRoom(code: string, teamToken?: string, hostToken?: string) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...action,
-            teamToken: tokenRef.current,
+            // 승인/거절 액션의 teamToken은 대상 태블릿이다. 교사 화면에는
+            // 본인 팀 토큰이 없으므로 undefined로 덮어쓰지 않는다.
+            teamToken: "teamToken" in action ? action.teamToken : tokenRef.current,
             hostToken: hostRef.current,
           }),
         });
