@@ -35,10 +35,8 @@ create trigger rooms_set_updated_at
 
 alter table rooms enable row level security;
 
--- 로그인 없이 방 코드만으로 입장하는 구조이므로, 읽기는 누구나(anon) 허용한다.
--- 쓰기는 정책을 두지 않아 anon 키로는 불가능하며, 서버(Route Handler)의
--- service_role 키만 RLS를 우회해 상태를 변경할 수 있다.
+-- rooms에는 교사 토큰과 팀 토큰이 들어 있으므로 브라우저에서 직접 읽을 수 없어야 한다.
+-- 모든 조회와 변경은 서버 Route Handler의 service_role 클라이언트만 수행한다.
+-- 관전 화면의 실시간 갱신은 검열된 PublicRoomState를 Realtime Broadcast로 전달한다.
 drop policy if exists "rooms are publicly readable" on rooms;
-create policy "rooms are publicly readable"
-  on rooms for select
-  using (true);
+revoke select on table rooms from anon, authenticated;
