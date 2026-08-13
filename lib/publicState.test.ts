@@ -9,6 +9,14 @@ function playing(): RoomState {
   return applyRoomAction(createInitialRoomState(), { type: "START_GAME" });
 }
 
+function approveForTest(state: RoomState, teamToken: string): RoomState {
+  return {
+    ...state,
+    connectedTeams: [...state.connectedTeams, teamToken],
+    approvedTeams: [...state.approvedTeams, { teamToken, nickname: "테스트 조", seatNumber: state.approvedTeams.length + 1 }],
+  };
+}
+
 function withAllChoices(): RoomState {
   let state = playing();
   for (const c of state.countries) {
@@ -18,6 +26,15 @@ function withAllChoices(): RoomState {
 }
 
 describe("toPublicState — 비밀 제출 경계 (SPEC.md 4.1)", () => {
+  it("승인 대기와 승인 좌석의 팀 토큰을 공개 상태에서 제거한다", () => {
+    let state = createInitialRoomState();
+    state = applyRoomAction(state, { type: "REQUEST_TEAM_APPROVAL", teamToken: "pending-secret", nickname: "1조" });
+    state = applyRoomAction(state, { type: "REQUEST_TEAM_APPROVAL", teamToken: "approved-secret", nickname: "2조" });
+    state = applyRoomAction(state, { type: "APPROVE_TEAM", teamToken: "approved-secret" });
+    const serialized = JSON.stringify(toPublicState(state));
+    expect(serialized).not.toContain("pending-secret");
+    expect(serialized).not.toContain("approved-secret");
+  });
   it("퀴즈 정답과 해설은 학급 답변 제출 뒤에만 공개한다", () => {
     let state = withAllChoices();
     state = applyRoomAction(state, { type: "REVEAL" });
@@ -71,7 +88,7 @@ describe("toPublicState — 비밀 제출 경계 (SPEC.md 4.1)", () => {
   });
 
   it("팀 토큰은 어떤 경우에도 밖으로 나가지 않는다", () => {
-    let state = playing();
+    let state = approveForTest(playing(), "secret-token");
     state = applyRoomAction(state, { type: "CLAIM_COUNTRY", countryId: "kor", teamToken: "secret-token" });
     const pub = toPublicState(state, { teamToken: "secret-token" });
 
@@ -82,7 +99,7 @@ describe("toPublicState — 비밀 제출 경계 (SPEC.md 4.1)", () => {
   });
 
   it("본인 토큰으로 자기 국가를 식별해준다", () => {
-    let state = playing();
+    let state = approveForTest(playing(), "team-a");
     state = applyRoomAction(state, { type: "CLAIM_COUNTRY", countryId: "tuv", teamToken: "team-a" });
     expect(toPublicState(state, { teamToken: "team-a" }).myCountryId).toBe("tuv");
     expect(toPublicState(state, { teamToken: "team-b" }).myCountryId).toBeNull();

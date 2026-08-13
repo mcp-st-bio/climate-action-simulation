@@ -35,10 +35,24 @@ export type RoomStage = "lobby" | "country_select" | "playing";
 /** 국가 선택이 열리기까지의 카운트다운 길이 (SPEC 외 요구사항: 선착순이라 5초를 준다). */
 export const COUNTRY_SELECT_COUNTDOWN_MS = 5000;
 
+export interface TeamApplication {
+  teamToken: string;
+  nickname: string;
+  requestedAt: number;
+}
+
+export interface ApprovedTeam {
+  teamToken: string;
+  nickname: string;
+  seatNumber: number;
+}
+
 export interface RoomState {
   stage: RoomStage;
   /** 로비에서 접속한 태블릿의 팀 토큰. 절대 밖으로 내보내지 않고 인원수만 공개한다. */
   connectedTeams: string[];
+  teamApplications: TeamApplication[];
+  approvedTeams: ApprovedTeam[];
   /** 이 시각(epoch ms)이 지나야 국가 선점이 허용된다. 서버가 최종 판정한다. */
   countrySelectOpensAt: number | null;
   turn: number;
@@ -78,6 +92,8 @@ export function createInitialRoomState(): RoomState {
   return {
     stage: "lobby",
     connectedTeams: [],
+    teamApplications: [],
+    approvedTeams: [],
     countrySelectOpensAt: null,
     turn: 1,
     phaseIndex: 0,

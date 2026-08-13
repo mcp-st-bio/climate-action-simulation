@@ -19,14 +19,7 @@ export default function TeamView({ code }: { code: string }) {
   const token = useTeamToken(code);
   const { state, error, notFound, clockOffset, dispatch } = useRoom(code, token);
   const remaining = useCountdown(state?.timer);
-
-  // 방에 들어오면 로비에 등록한다. 이미 등록돼 있으면 서버가 무시한다.
-  const joined = state?.meConnected;
-  useEffect(() => {
-    if (token && state && !joined) {
-      dispatch({ type: "JOIN_ROOM", teamToken: token });
-    }
-  }, [token, state, joined, dispatch]);
+  const [nickname, setNickname] = useState("");
 
   // 카운트다운이 흐르도록 국가 선택 단계에서만 주기적으로 다시 그린다.
   useTick(state?.stage === "country_select" ? 200 : null);
@@ -38,6 +31,46 @@ export default function TeamView({ code }: { code: string }) {
     return <Centered>연결 중...</Centered>;
   }
 
+  if (state.myTeamApproval.status === "none") {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-5">
+        <section className="w-full max-w-md space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <div className="text-center">
+            <p className="text-sm text-slate-400">방 코드 {code}</p>
+            <h1 className="mt-1 text-2xl font-black">조 이름을 입력하세요</h1>
+            <p className="mt-2 text-sm text-slate-400">예: 1조, 푸른 지구, 창가 2조</p>
+          </div>
+          <input
+            value={nickname}
+            maxLength={12}
+            onChange={(event) => setNickname(event.target.value)}
+            placeholder="조 이름 (최대 12자)"
+            className="min-h-[60px] w-full rounded-xl bg-slate-800 px-4 text-lg"
+          />
+          <button
+            disabled={!nickname.trim()}
+            onClick={() => dispatch({ type: "REQUEST_TEAM_APPROVAL", teamToken: token, nickname })}
+            className="min-h-[60px] w-full rounded-xl bg-sky-700 text-lg font-bold hover:bg-sky-600 disabled:opacity-40"
+          >
+            선생님께 승인 요청
+          </button>
+          {error && <p className="text-center text-sm text-red-400">{error}</p>}
+        </section>
+      </main>
+    );
+  }
+
+  if (state.myTeamApproval.status === "pending") {
+    return (
+      <Centered>
+        <span className="block text-center">
+          <span className="block text-3xl">승인을 기다리고 있습니다</span>
+          <span className="mt-3 block text-base font-normal text-slate-400">{state.myTeamApproval.nickname} · 선생님이 확인 중입니다.</span>
+        </span>
+      </Centered>
+    );
+  }
+
   // --- 대기 화면: 교사가 국가 선택을 열어줄 때까지 ---
   if (state.stage === "lobby") {
     return (
@@ -45,6 +78,8 @@ export default function TeamView({ code }: { code: string }) {
         code={code}
         connected={state.connectedCount}
         expected={state.expectedTeams}
+        nickname={state.myTeamApproval.nickname ?? "우리 조"}
+        seatNumber={state.myTeamApproval.seatNumber}
       />
     );
   }
@@ -230,10 +265,14 @@ function WaitingRoom({
   code,
   connected,
   expected,
+  nickname,
+  seatNumber,
 }: {
   code: string;
   connected: number;
   expected: number;
+  nickname: string;
+  seatNumber: number | null;
 }) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-6 text-center">
@@ -243,7 +282,8 @@ function WaitingRoom({
       </div>
 
       <div className="rounded-2xl border border-slate-800 bg-slate-900 px-8 py-10">
-        <p className="text-2xl font-black">접속했습니다!</p>
+        <p className="text-2xl font-black">{nickname} 승인 완료!</p>
+        {seatNumber && <p className="mt-1 text-sm text-emerald-400">{seatNumber}번 좌석</p>}
         <p className="mt-3 text-lg text-slate-400">
           선생님이 시작할 때까지
           <br />

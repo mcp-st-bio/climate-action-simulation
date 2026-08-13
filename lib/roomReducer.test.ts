@@ -21,6 +21,15 @@ function currentPhase(state: RoomState) {
   return getPhaseSequence(state.turn)[state.phaseIndex];
 }
 
+function withApprovedToken(state: RoomState, teamToken: string, nickname = teamToken): RoomState {
+  if (state.connectedTeams.includes(teamToken)) return state;
+  return {
+    ...state,
+    connectedTeams: [...state.connectedTeams, teamToken],
+    approvedTeams: [...state.approvedTeams, { teamToken, nickname, seatNumber: state.approvedTeams.length + 1 }],
+  };
+}
+
 /** GO_NEXT until the room reaches the given phase within the current turn. */
 function advanceToPhase(state: RoomState, phase: string): RoomState {
   let s = state;
@@ -64,6 +73,7 @@ function playTurn(
 describe("교사 전용 조작 경계", () => {
   it("게임 진행과 판정에 영향을 주는 조작을 모두 교사 전용으로 분류한다", () => {
     const teacherActions = [
+      "APPROVE_TEAM", "REJECT_TEAM", "REVOKE_TEAM",
       "START_COUNTRY_SELECT", "START_GAME", "RESET_CONNECTIONS", "REVEAL",
       "SUBMIT_QUIZ_ANSWER", "DISMISS_ABILITY_REQUEST", "KOREA_ABILITY",
       "USA_ABILITY", "SWEDEN_ABILITY", "JAPAN_ABILITY", "TUVALU_ABILITY",
@@ -74,25 +84,37 @@ describe("교사 전용 조작 경계", () => {
     for (const action of teacherActions) expect(HOST_ONLY_ACTIONS.has(action)).toBe(true);
   });
 
-  it("학생에게 필요한 네 가지 조작은 교사 전용 목록에 넣지 않는다", () => {
-    for (const action of ["JOIN_ROOM", "CLAIM_COUNTRY", "SET_DEV_CHOICE", "REQUEST_ABILITY"] as const) {
+  it("학생에게 필요한 조작은 교사 전용 목록에 넣지 않는다", () => {
+    for (const action of ["REQUEST_TEAM_APPROVAL", "CLAIM_COUNTRY", "SET_DEV_CHOICE", "REQUEST_ABILITY"] as const) {
       expect(HOST_ONLY_ACTIONS.has(action)).toBe(false);
     }
   });
 });
 
 describe("입장 준비 단계 (로비 → 국가 선택 → 진행)", () => {
-  it("JOIN_ROOM은 태블릿을 등록하고, 새로고침해도 중복 집계하지 않는다", () => {
+  it("닉네임 신청은 승인 전에는 접속 인원에 포함하지 않는다", () => {
     let state = createInitialRoomState();
-    expect(state.stage).toBe("lobby");
+    state = applyRoomAction(state, { type: "REQUEST_TEAM_APPROVAL", teamToken: "pad-token-1", nickname: "  1조  " });
+    expect(state.connectedTeams).toEqual([]);
+    expect(state.teamApplications[0].nickname).toBe("1조");
+  });
 
-    state = applyRoomAction(state, { type: "JOIN_ROOM", teamToken: "pad-1" });
-    state = applyRoomAction(state, { type: "JOIN_ROOM", teamToken: "pad-2" });
-    expect(state.connectedTeams).toEqual(["pad-1", "pad-2"]);
+  it("교사가 승인한 태블릿만 좌석과 접속 권한을 얻는다", () => {
+    let state = createInitialRoomState();
+    state = applyRoomAction(state, { type: "REQUEST_TEAM_APPROVAL", teamToken: "pad-token-1", nickname: "1조" });
+    state = applyRoomAction(state, { type: "APPROVE_TEAM", teamToken: "pad-token-1" });
+    expect(state.connectedTeams).toEqual(["pad-token-1"]);
+    expect(state.approvedTeams[0]).toEqual({ teamToken: "pad-token-1", nickname: "1조", seatNumber: 1 });
+    expect(state.teamApplications).toEqual([]);
+  });
 
-    // 같은 태블릿이 새로고침한 경우
-    state = applyRoomAction(state, { type: "JOIN_ROOM", teamToken: "pad-1" });
-    expect(state.connectedTeams).toEqual(["pad-1", "pad-2"]);
+  it("잘못된 닉네임과 중복 닉네임을 거부한다", () => {
+    let state = createInitialRoomState();
+    state = applyRoomAction(state, { type: "REQUEST_TEAM_APPROVAL", teamToken: "token-invalid", nickname: "<script>" });
+    expect(state.teamApplications).toEqual([]);
+    state = applyRoomAction(state, { type: "REQUEST_TEAM_APPROVAL", teamToken: "token-team-a", nickname: "푸른 지구" });
+    state = applyRoomAction(state, { type: "REQUEST_TEAM_APPROVAL", teamToken: "token-team-b", nickname: "푸른   지구" });
+    expect(state.teamApplications).toHaveLength(1);
   });
 
   it("로비에서는 국가를 선점할 수 없다", () => {
@@ -110,7 +132,7 @@ describe("입장 준비 단계 (로비 → 국가 선택 → 진행)", () => {
   });
 
   it("카운트다운이 끝나기 전의 선점 요청은 서버가 거부한다", () => {
-    let state = createInitialRoomState();
+    let state = withApprovedToken(createInitialRoomState(), "pad-1", "1조");
     state = applyRoomAction(state, { type: "START_COUNTRY_SELECT" });
 
     // 태블릿 시계가 빨라 먼저 눌러도 서버 시각 기준으로 막힌다
@@ -125,6 +147,7 @@ describe("입장 준비 단계 (로비 → 국가 선택 → 진행)", () => {
 
   it("6개국이 모두 정해지면 자동으로 1턴이 시작된다", () => {
     let state = createInitialRoomState();
+    for (let i = 0; i < 6; i++) state = withApprovedToken(state, `pad-${i}`, `${i + 1}조`);
     state = applyRoomAction(state, { type: "START_COUNTRY_SELECT" });
     state = { ...state, countrySelectOpensAt: Date.now() - 1 };
 
@@ -148,24 +171,21 @@ describe("입장 준비 단계 (로비 → 국가 선택 → 진행)", () => {
     ).toBe(state);
   });
 
-  it("RESET_CONNECTIONS는 여분 기기가 섞였을 때 접속 집계를 비운다", () => {
+  it("승인 거절과 승인 취소를 처리한다", () => {
     let state = createInitialRoomState();
-    for (const t of ["pad-1", "pad-2", "교사폰", "학생휴대폰"]) {
-      state = applyRoomAction(state, { type: "JOIN_ROOM", teamToken: t });
-    }
-    expect(state.connectedTeams).toHaveLength(4);
-
-    state = applyRoomAction(state, { type: "RESET_CONNECTIONS" });
+    state = applyRoomAction(state, { type: "REQUEST_TEAM_APPROVAL", teamToken: "token-team-a", nickname: "1조" });
+    state = applyRoomAction(state, { type: "REJECT_TEAM", teamToken: "token-team-a" });
+    expect(state.teamApplications).toEqual([]);
+    state = applyRoomAction(state, { type: "REQUEST_TEAM_APPROVAL", teamToken: "token-team-a", nickname: "1조" });
+    state = applyRoomAction(state, { type: "APPROVE_TEAM", teamToken: "token-team-a" });
+    state = applyRoomAction(state, { type: "REVOKE_TEAM", teamToken: "token-team-a" });
     expect(state.connectedTeams).toEqual([]);
-
-    // 살아 있는 태블릿은 스스로 다시 등록한다
-    state = applyRoomAction(state, { type: "JOIN_ROOM", teamToken: "pad-1" });
-    expect(state.connectedTeams).toEqual(["pad-1"]);
+    expect(state.approvedTeams).toEqual([]);
   });
 
   it("START_GAME은 태블릿이 모자랄 때 교사가 강제로 시작하는 통로다", () => {
     let state = createInitialRoomState();
-    state = applyRoomAction(state, { type: "JOIN_ROOM", teamToken: "pad-1" });
+    state = withApprovedToken(state, "pad-1", "1조");
     state = applyRoomAction(state, { type: "START_GAME" });
     expect(state.stage).toBe("playing");
     expect(state.timer.startedAt).not.toBeNull();
@@ -189,6 +209,8 @@ describe("roomReducer orchestration", () => {
 
   it("CLAIM_COUNTRY refuses to hand a country to a second team", () => {
     let state = playing();
+    state = withApprovedToken(state, "team-a");
+    state = withApprovedToken(state, "team-b");
     state = applyRoomAction(state, { type: "CLAIM_COUNTRY", countryId: "kor", teamToken: "team-a" });
     state = applyRoomAction(state, { type: "CLAIM_COUNTRY", countryId: "kor", teamToken: "team-b" });
     expect(state.claims.kor).toBe("team-a");
@@ -196,6 +218,7 @@ describe("roomReducer orchestration", () => {
 
   it("CLAIM_COUNTRY lets the same token reclaim (reconnect) and releases its old country", () => {
     let state = playing();
+    state = withApprovedToken(state, "team-a");
     state = applyRoomAction(state, { type: "CLAIM_COUNTRY", countryId: "kor", teamToken: "team-a" });
     // 재접속: 같은 토큰이므로 그대로 유지된다
     state = applyRoomAction(state, { type: "CLAIM_COUNTRY", countryId: "kor", teamToken: "team-a" });

@@ -317,11 +317,46 @@ function LobbyPanel({
         </div>
       </div>
 
+      {state.stage === "lobby" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-lg border border-amber-800/50 bg-amber-950/20 p-4">
+            <h3 className="font-bold">승인 대기 ({state.teamApprovalRequests.length})</h3>
+            <div className="mt-3 space-y-2">
+              {state.teamApprovalRequests.length === 0 ? (
+                <p className="text-sm text-slate-500">아직 승인 요청이 없습니다.</p>
+              ) : state.teamApprovalRequests.map((team) => (
+                <div key={team.teamToken} className="flex items-center justify-between gap-2 rounded bg-slate-900 p-2">
+                  <span className="font-medium">{team.nickname}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => dispatch({ type: "APPROVE_TEAM", teamToken: team.teamToken })} className="rounded bg-emerald-700 px-3 py-1 text-sm font-bold">승인</button>
+                    <button onClick={() => dispatch({ type: "REJECT_TEAM", teamToken: team.teamToken })} className="rounded bg-slate-700 px-3 py-1 text-sm">거절</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-4">
+            <h3 className="font-bold">승인된 조 ({state.approvedTeamSeats.length}/6)</h3>
+            <div className="mt-3 space-y-2">
+              {state.approvedTeamSeats.length === 0 ? (
+                <p className="text-sm text-slate-500">승인된 조가 없습니다.</p>
+              ) : state.approvedTeamSeats.map((team) => (
+                <div key={team.teamToken} className="flex items-center justify-between gap-2 rounded bg-slate-900 p-2">
+                  <span><b>{team.seatNumber}번</b> · {team.nickname}</span>
+                  <button onClick={() => dispatch({ type: "REVOKE_TEAM", teamToken: team.teamToken })} className="rounded bg-red-900 px-3 py-1 text-xs">승인 취소</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {state.stage === "lobby" ? (
         <div className="space-y-2">
           <button
+            disabled={state.connectedCount === 0}
             onClick={() => dispatch({ type: "START_COUNTRY_SELECT" })}
-            className="min-h-[60px] w-full rounded-lg bg-sky-700 text-lg font-bold hover:bg-sky-600"
+            className="min-h-[60px] w-full rounded-lg bg-sky-700 text-lg font-bold hover:bg-sky-600 disabled:opacity-40"
           >
             국가 선택 시작 (5초 후 열림)
           </button>

@@ -19,8 +19,20 @@ export interface PublicQuizState {
   sources: QuizSource[] | null;
 }
 
+export interface PublicTeamApplication {
+  teamToken: string;
+  nickname: string;
+  requestedAt: number;
+}
+
+export interface PublicApprovedTeam {
+  teamToken: string;
+  nickname: string;
+  seatNumber: number;
+}
+
 export interface PublicRoomState
-  extends Omit<RoomState, "devChoices" | "claims" | "connectedTeams" | "quizAnswer"> {
+  extends Omit<RoomState, "devChoices" | "claims" | "connectedTeams" | "teamApplications" | "approvedTeams" | "quizAnswer"> {
   /** 공개 전에는 비어 있고(본인 국가 제외), 공개 후에는 6개국 전부 담긴다. */
   devChoices: Partial<Record<CountryId, DevChoice>>;
   /** 내용은 감추고 "누가 냈는지"만 노출한다 ("3/6 제출 완료" 표시용). */
@@ -35,13 +47,19 @@ export interface PublicRoomState
   expectedTeams: number;
   /** 이 조회를 보낸 태블릿이 로비에 등록되어 있는지. */
   meConnected: boolean;
+  /** 교사에게만 제공하는 승인 대기 목록. */
+  teamApprovalRequests: PublicTeamApplication[];
+  /** 교사에게만 제공하는 승인 좌석 목록. */
+  approvedTeamSeats: PublicApprovedTeam[];
+  /** 학생 본인의 승인 상태. */
+  myTeamApproval: { status: "pending" | "approved" | "none"; nickname: string | null; seatNumber: number | null };
   /** 정답과 해설은 교사가 답을 제출한 뒤에만 공개한다. */
   quiz: PublicQuizState | null;
 }
 
 export function toPublicState(
   state: RoomState,
-  viewer?: { countryId?: CountryId; teamToken?: string }
+  viewer?: { countryId?: CountryId; teamToken?: string; isHost?: boolean }
 ): PublicRoomState {
   const submittedCountryIds = (Object.keys(state.devChoices) as CountryId[]).filter(
     (id) => state.devChoices[id] !== undefined
@@ -68,6 +86,8 @@ export function toPublicState(
     claims: _claims,
     devChoices: _raw,
     connectedTeams,
+    teamApplications: _teamApplications,
+    approvedTeams: _approvedTeams,
     quizAnswer: _quizAnswer,
     ...rest
   } = state;
@@ -85,6 +105,14 @@ export function toPublicState(
         sources: answered ? quizItem.sources : null,
       }
     : null;
+  const applications = state.teamApplications ?? [];
+  const approvedTeams = state.approvedTeams ?? [];
+  const pendingMine = viewer?.teamToken
+    ? applications.find((team) => team.teamToken === viewer.teamToken)
+    : undefined;
+  const approvedMine = viewer?.teamToken
+    ? approvedTeams.find((team) => team.teamToken === viewer.teamToken)
+    : undefined;
 
   return {
     ...rest,
@@ -97,6 +125,13 @@ export function toPublicState(
     connectedCount: connectedTeams.length,
     expectedTeams: state.countries.length,
     meConnected: viewer?.teamToken ? connectedTeams.includes(viewer.teamToken) : false,
+    teamApprovalRequests: viewer?.isHost ? applications : [],
+    approvedTeamSeats: viewer?.isHost ? approvedTeams : [],
+    myTeamApproval: approvedMine
+      ? { status: "approved", nickname: approvedMine.nickname, seatNumber: approvedMine.seatNumber }
+      : pendingMine
+        ? { status: "pending", nickname: pendingMine.nickname, seatNumber: null }
+        : { status: "none", nickname: null, seatNumber: null },
     quiz,
   };
 }

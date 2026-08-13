@@ -37,6 +37,10 @@ import { getQuizForTurn } from "@/lib/quiz";
 
 export type RoomAction =
   | { type: "JOIN_ROOM"; teamToken: string }
+  | { type: "REQUEST_TEAM_APPROVAL"; teamToken: string; nickname: string }
+  | { type: "APPROVE_TEAM"; teamToken: string }
+  | { type: "REJECT_TEAM"; teamToken: string }
+  | { type: "REVOKE_TEAM"; teamToken: string }
   | { type: "RESET_CONNECTIONS" }
   | { type: "START_COUNTRY_SELECT" }
   | { type: "START_GAME" }
@@ -68,6 +72,9 @@ export type RoomAction =
 
 /** 교사 기기 토큰이 있어야 실행되는 액션. 판을 바꾸거나 비밀 제출을 열람하는 조작들. */
 export const HOST_ONLY_ACTIONS: ReadonlySet<RoomAction["type"]> = new Set([
+  "APPROVE_TEAM",
+  "REJECT_TEAM",
+  "REVOKE_TEAM",
   "REVEAL",
   "DISMISS_ABILITY_REQUEST",
   "KOREA_ABILITY",
@@ -148,6 +155,14 @@ function nameOf(countries: Country[], id: CountryId | null | undefined): string 
 
 function pushLog(state: RoomState, msg: string): RoomState {
   return { ...state, log: [msg, ...state.log].slice(0, 40) };
+}
+
+const TEAM_NICKNAME_PATTERN = /^[가-힣A-Za-z0-9 -]{1,12}$/;
+
+export function normalizeTeamNickname(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const nickname = value.trim().replace(/\s+/g, " ");
+  return TEAM_NICKNAME_PATTERN.test(nickname) ? nickname : null;
 }
 
 function changeTemperature(state: RoomState, deltaDeci: number, reason: string): RoomState {
@@ -258,19 +273,84 @@ export function applyRoomAction(state: RoomState, action: RoomAction): RoomState
       return state;
 
     case "JOIN_ROOM": {
-      // 태블릿이 방 코드로 들어와 로비에 등록한다. 새로고침해도 중복 집계되지 않는다.
-      if (state.connectedTeams.includes(action.teamToken)) return state;
-      const connectedTeams = [...state.connectedTeams, action.teamToken];
-      return pushLog(
-        { ...state, connectedTeams },
-        `태블릿 접속 ${connectedTeams.length}/${state.countries.length}`
+      // 구버전의 무승인 접속 요청은 더 이상 인원으로 집계하지 않는다.
+      return state;
+    }
+
+    case "REQUEST_TEAM_APPROVAL": {
+      if (
+        state.stage !== "lobby" ||
+        typeof action.teamToken !== "string" ||
+        action.teamToken.length < 8 ||
+        action.teamToken.length > 100 ||
+        (state.approvedTeams ?? []).some((team) => team.teamToken === action.teamToken)
+      ) return state;
+      const applications = state.teamApplications ?? [];
+      const approvedTeams = state.approvedTeams ?? [];
+      if (applications.length >= 24 && !applications.some((team) => team.teamToken === action.teamToken)) return state;
+      const nickname = normalizeTeamNickname(action.nickname);
+      if (!nickname) return state;
+      const duplicateName = [...applications, ...approvedTeams].some(
+        (team) => team.teamToken !== action.teamToken && team.nickname.toLocaleLowerCase("ko") === nickname.toLocaleLowerCase("ko")
       );
+      if (duplicateName) return state;
+      const request = { teamToken: action.teamToken, nickname, requestedAt: Date.now() };
+      const existing = applications.findIndex((team) => team.teamToken === action.teamToken);
+      const teamApplications = [...applications];
+      if (existing >= 0) teamApplications[existing] = request;
+      else teamApplications.push(request);
+      return pushLog({ ...state, teamApplications }, `${nickname} 승인 요청`);
+    }
+
+    case "APPROVE_TEAM": {
+      const applications = state.teamApplications ?? [];
+      const approvedTeams = state.approvedTeams ?? [];
+      if (state.stage !== "lobby" || approvedTeams.length >= state.countries.length) return state;
+      const application = applications.find((team) => team.teamToken === action.teamToken);
+      if (!application) return state;
+      const usedSeats = new Set(approvedTeams.map((team) => team.seatNumber));
+      const seatNumber = Array.from({ length: state.countries.length }, (_, index) => index + 1).find((seat) => !usedSeats.has(seat));
+      if (!seatNumber) return state;
+      return pushLog({
+        ...state,
+        teamApplications: applications.filter((team) => team.teamToken !== action.teamToken),
+        approvedTeams: [...approvedTeams, { teamToken: action.teamToken, nickname: application.nickname, seatNumber }],
+        connectedTeams: state.connectedTeams.includes(action.teamToken)
+          ? state.connectedTeams
+          : [...state.connectedTeams, action.teamToken],
+      }, `${application.nickname} 승인 (${seatNumber}번 좌석)`);
+    }
+
+    case "REJECT_TEAM": {
+      const applications = state.teamApplications ?? [];
+      const application = applications.find((team) => team.teamToken === action.teamToken);
+      if (!application) return state;
+      return pushLog({ ...state, teamApplications: applications.filter((team) => team.teamToken !== action.teamToken) }, `${application.nickname} 승인 거절`);
+    }
+
+    case "REVOKE_TEAM": {
+      const approvedTeams = state.approvedTeams ?? [];
+      const approved = approvedTeams.find((team) => team.teamToken === action.teamToken);
+      if (!approved) return state;
+      const claims = { ...state.claims };
+      const countryId = (Object.keys(claims) as CountryId[]).find((id) => claims[id] === action.teamToken);
+      if (countryId) delete claims[countryId];
+      const devChoices = { ...state.devChoices };
+      if (countryId) delete devChoices[countryId];
+      return pushLog({
+        ...state,
+        connectedTeams: state.connectedTeams.filter((token) => token !== action.teamToken),
+        approvedTeams: approvedTeams.filter((team) => team.teamToken !== action.teamToken),
+        claims,
+        devChoices,
+        abilityRequests: countryId ? state.abilityRequests.filter((id) => id !== countryId) : state.abilityRequests,
+      }, `${approved.nickname} 승인 취소`);
     }
 
     case "RESET_CONNECTIONS":
       // 교사가 확인차 팀 화면을 열었거나 학생 휴대폰이 섞여 들어와 숫자가 부풀었을 때 쓴다.
       // 각 태블릿은 화면이 살아 있으면 스스로 다시 등록하므로 곧 정확한 수로 회복된다.
-      return pushLog({ ...state, connectedTeams: [] }, "접속 현황을 초기화했습니다.");
+      return pushLog({ ...state, connectedTeams: [], approvedTeams: [], teamApplications: [], claims: {} }, "접속 현황을 초기화했습니다.");
 
     case "START_COUNTRY_SELECT": {
       if (state.stage !== "lobby") return state;
@@ -293,6 +373,7 @@ export function applyRoomAction(state: RoomState, action: RoomAction): RoomState
     }
 
     case "CLAIM_COUNTRY": {
+      if (!state.connectedTeams.includes(action.teamToken)) return state;
       // 아직 선택이 열리지 않았으면 거부한다. 태블릿 시계가 빨라도 서버가 최종 판정한다.
       if (state.stage === "lobby") return state;
       if (state.countrySelectOpensAt !== null && Date.now() < state.countrySelectOpensAt) {

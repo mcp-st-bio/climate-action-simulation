@@ -85,6 +85,10 @@ export function useRoom(code: string, teamToken?: string, hostToken?: string) {
     const channel = supabaseBrowser
       .channel(`room-${code}`)
       .on("broadcast", { event: "state" }, ({ payload }) => {
+        if (tokenRef.current || hostRef.current) {
+          void refetch();
+          return;
+        }
         setState((prev) => {
           const next = payload as PublicRoomState;
           // broadcast는 검열된 공용 상태라 내 선택이 비어 있다.

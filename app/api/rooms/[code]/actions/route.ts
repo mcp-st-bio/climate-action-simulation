@@ -58,6 +58,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
       );
     }
 
+    if (action.type === "JOIN_ROOM") {
+      return NextResponse.json(
+        { error: "조 이름을 입력하고 교사 승인을 요청해 주세요." },
+        { status: 410 }
+      );
+    }
+
+    if (
+      action.type === "CLAIM_COUNTRY" &&
+      !currentState.connectedTeams.includes(action.teamToken)
+    ) {
+      return NextResponse.json(
+        { error: "교사 승인을 받은 태블릿만 국가를 선택할 수 있습니다." },
+        { status: 403 }
+      );
+    }
+
     // 학생은 자신의 팀 토큰으로 점유한 국가만 선택하거나 능력을 요청할 수 있다.
     if (
       (action.type === "SET_DEV_CHOICE" || action.type === "REQUEST_ABILITY") &&
@@ -106,12 +123,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
     }
 
     if (updated && updated.length > 0) {
-      const publicState = toPublicState(nextState, { teamToken: action.teamToken });
+      const publicState = toPublicState(nextState, { teamToken: action.teamToken, isHost: hasHostAuthority });
       await broadcastRoomState(roomCode, toPublicState(nextState));
       return NextResponse.json({
         state: toPublicState(nextState, {
           teamToken: action.teamToken,
           countryId: publicState.myCountryId ?? undefined,
+          isHost: hasHostAuthority,
         }),
         canUndo: nextPrevious !== null,
         serverNow: Date.now(),

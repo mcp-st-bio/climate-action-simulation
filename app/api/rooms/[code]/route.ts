@@ -29,10 +29,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ code: st
   }
 
   const publicState = toPublicState(data.state, { teamToken: token });
+  const isHost = typeof data.host_token === "string" && hostToken === data.host_token;
   // 본인 국가를 알아낸 뒤 자기 선택까지 포함해 다시 검열한다.
   const withOwnChoice = toPublicState(data.state, {
     teamToken: token,
     countryId: publicState.myCountryId ?? undefined,
+    isHost,
   });
 
   // 새로고침 후에도 되돌리기가 살아 있어야 하므로 스냅샷 유무를 함께 알린다.
@@ -40,7 +42,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ code: st
   return NextResponse.json({
     state: withOwnChoice,
     canUndo: data.previous_state !== null,
-    isHost: typeof data.host_token === "string" && hostToken === data.host_token,
+    isHost,
     serverNow: Date.now(),
   });
 }
