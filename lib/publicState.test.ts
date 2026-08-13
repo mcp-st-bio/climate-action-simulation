@@ -107,7 +107,7 @@ describe("toPublicState — 비밀 제출 경계 (SPEC.md 4.1)", () => {
   });
 
   it("강제 선택은 공개 전에도 보인다 (다른 조도 알아야 하는 공개 정보)", () => {
-    let state = playing();
+    let state = { ...playing(), turn: 2, phaseIndex: 1, temperatureDeci: 170 };
     state = applyRoomAction(state, { type: "DENMARK_ABILITY", countryId: "dnk" });
     const pub = toPublicState(state);
     const forced = pub.countries.filter((c) => c.forcedChoice);

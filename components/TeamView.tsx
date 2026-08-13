@@ -133,6 +133,7 @@ export default function TeamView({ code }: { code: string }) {
     : state.devChoices[myCountry.id];
   const submitted = state.submittedCountryIds.includes(myCountry.id);
   const availability = getAbilityAvailability(myCountry, state.turn, state.temperatureDeci);
+  const abilityAvailableNow = phase === "representative_meeting" && availability.allowed;
   const requested = state.abilityRequests.includes(myCountry.id);
 
   return (
@@ -233,14 +234,16 @@ export default function TeamView({ code }: { code: string }) {
         ) : (
           <>
             <button
-              disabled={!availability.allowed}
+              disabled={!abilityAvailableNow}
               onClick={() => dispatch({ type: "REQUEST_ABILITY", countryId: myCountry.id })}
               className="mt-3 min-h-[70px] w-full rounded-xl bg-sky-700 text-lg font-bold disabled:opacity-30"
             >
               능력 사용 요청
             </button>
-            {!availability.allowed && (
-              <p className="mt-2 text-center text-sm text-amber-300">{availability.reason}</p>
+            {!abilityAvailableNow && (
+              <p className="mt-2 text-center text-sm text-amber-300">
+                {phase !== "representative_meeting" ? "특수 능력은 대표 회의에서만 사용할 수 있습니다." : availability.reason}
+              </p>
             )}
           </>
         )}

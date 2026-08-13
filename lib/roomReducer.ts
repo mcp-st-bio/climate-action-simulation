@@ -138,6 +138,21 @@ const PLAYING_ONLY_ACTIONS: ReadonlySet<RoomAction["type"]> = new Set([
   "GO_NEXT",
 ]);
 
+const REPRESENTATIVE_MEETING_ONLY_ACTIONS: ReadonlySet<RoomAction["type"]> = new Set([
+  "REQUEST_ABILITY",
+  "KOREA_ABILITY",
+  "USA_ABILITY",
+  "SWEDEN_ABILITY",
+  "JAPAN_ABILITY",
+  "TUVALU_ABILITY",
+  "DENMARK_ABILITY",
+]);
+
+const ABILITY_EXECUTION_ACTIONS: ReadonlySet<RoomAction["type"]> = new Set([
+  "KOREA_ABILITY", "USA_ABILITY", "SWEDEN_ABILITY", "JAPAN_ABILITY",
+  "TUVALU_ABILITY", "DENMARK_ABILITY",
+]);
+
 /** 게임 종료 후에도 허용되는 액션. 실수로 멸망시킨 판을 되살릴 수 있어야 한다. */
 const ALLOWED_WHEN_GAME_OVER: ReadonlySet<RoomAction["type"]> = new Set([
   "RESET",
@@ -211,6 +226,14 @@ export function applyRoomAction(state: RoomState, action: RoomAction): RoomState
   if (state.gameOver && !ALLOWED_WHEN_GAME_OVER.has(action.type)) return state;
   // 로비/국가 선택 중에는 턴 진행 액션이 들어와도 무시한다.
   if (state.stage !== "playing" && PLAYING_ONLY_ACTIONS.has(action.type)) return state;
+  if (
+    REPRESENTATIVE_MEETING_ONLY_ACTIONS.has(action.type) &&
+    getPhaseSequence(state.turn)[state.phaseIndex] !== "representative_meeting"
+  ) return state;
+  if (ABILITY_EXECUTION_ACTIONS.has(action.type) && "countryId" in action) {
+    const country = state.countries.find((item) => item.id === action.countryId);
+    if (!country || !getAbilityAvailability(country, state.turn, state.temperatureDeci).allowed) return state;
+  }
 
   switch (action.type) {
     case "RESET":

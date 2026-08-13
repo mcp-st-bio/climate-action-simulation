@@ -491,6 +491,7 @@ function DevSelectPanel({
 
 function AbilityPanel({ state, dispatch }: { state: PublicRoomState; dispatch: Dispatch }) {
   const pending = state.abilityRequests.length;
+  const phase = getPhaseSequence(state.turn)[state.phaseIndex];
 
   return (
     <section className="rounded-xl border border-slate-800 bg-slate-900 p-4">
@@ -501,9 +502,9 @@ function AbilityPanel({ state, dispatch }: { state: PublicRoomState; dispatch: D
         )}
       </h2>
 
-      {!canUseAbilitiesThisTurn(state.turn) ? (
+      {phase !== "representative_meeting" ? (
         <p className="rounded bg-slate-800 p-3 text-sm text-slate-400">
-          7·8턴에는 대표회의와 특수 능력 사용이 없습니다.
+          특수 능력은 대표 회의에서만 요청하고 승인할 수 있습니다.
         </p>
       ) : (
         <div className="space-y-2">

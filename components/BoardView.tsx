@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRoom } from "@/lib/useRoom";
 import { useCountdown, formatTime } from "@/lib/useCountdown";
 import { getEarthBackground, getEarthCopy } from "@/lib/earthTheme";
@@ -18,24 +18,24 @@ export default function BoardView({ code }: { code: string }) {
   const { state, notFound } = useRoom(code);
   const remaining = useCountdown(state?.timer);
   const [flash, setFlash] = useState<string | null>(null);
-  const [lastStateName, setLastStateName] = useState<string | null>(null);
+  const lastStateNameRef = useRef<string | null>(null);
 
   const earthState = state ? getEarthState(state.temperatureDeci) : null;
 
   // 기온이 구간을 넘을 때마다 경고 연출을 띄운다 (SPEC.md 5절: 이 수업의 교육 효과 핵심).
   useEffect(() => {
     if (!earthState) return;
-    if (lastStateName === null) {
-      setLastStateName(earthState.name);
+    if (lastStateNameRef.current === null) {
+      lastStateNameRef.current = earthState.name;
       return;
     }
-    if (earthState.name !== lastStateName) {
-      setLastStateName(earthState.name);
+    if (earthState.name !== lastStateNameRef.current) {
+      lastStateNameRef.current = earthState.name;
       setFlash(earthState.name);
       const id = setTimeout(() => setFlash(null), 6000);
       return () => clearTimeout(id);
     }
-  }, [earthState, lastStateName]);
+  }, [earthState]);
 
   if (notFound) {
     return <CenteredMessage>방 코드 {code} 를 찾을 수 없습니다.</CenteredMessage>;
@@ -158,6 +158,12 @@ export default function BoardView({ code }: { code: string }) {
 
       {flash && (
         <div className="fixed inset-0 z-50 flex animate-pulse flex-col items-center justify-center bg-black/80 p-8 text-center">
+          <button
+            onClick={() => setFlash(null)}
+            className="absolute right-6 top-6 rounded-lg border border-white/30 bg-black/40 px-5 py-3 text-[2vh] font-bold hover:bg-black/70"
+          >
+            닫기
+          </button>
           <div className="text-[3vh] font-bold text-amber-300">지구의 상태가 변했습니다</div>
           <div className="mt-4 text-[8vh] font-black">{flash}</div>
           <div className="mt-4 text-[4vh] font-bold text-amber-200">{copy.headline}</div>

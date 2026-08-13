@@ -9,6 +9,10 @@ function playing(state = createInitialRoomState()): RoomState {
   return applyRoomAction(state, { type: "START_GAME" });
 }
 
+function representativeMeeting(tempDeci = 150): RoomState {
+  return { ...playing(), turn: 2, phaseIndex: 1, temperatureDeci: tempDeci };
+}
+
 function setAllDevChoices(state: RoomState, choice: "economy" | "balanced" | "environment") {
   let s = state;
   for (const c of s.countries) {
@@ -193,6 +197,15 @@ describe("입장 준비 단계 (로비 → 국가 선택 → 진행)", () => {
 });
 
 describe("roomReducer orchestration", () => {
+  it("특수 능력 요청과 실행은 대표 회의 밖에서 거부된다", () => {
+    let state = playing(); // 1턴 개발 선택 단계
+    state = applyRoomAction(state, { type: "REQUEST_ABILITY", countryId: "kor" });
+    const attempted = applyRoomAction(state, { type: "KOREA_ABILITY", countryId: "kor", loserId: "usa" });
+    expect(state.abilityRequests).toEqual([]);
+    expect(attempted).toBe(state);
+    expect(attempted.countries.find((country) => country.id === "kor")?.abilityUsed).toBe(false);
+  });
+
   it("RESET returns a fresh initial state regardless of current state", () => {
     let state = playing();
     state = applyRoomAction(state, { type: "SET_DEV_CHOICE", countryId: "kor", choice: "economy" });
@@ -231,7 +244,7 @@ describe("roomReducer orchestration", () => {
   });
 
   it("SET_DEV_CHOICE is rejected for a country under a forced choice", () => {
-    let state = playing();
+    let state = representativeMeeting(170);
     state = applyRoomAction(state, { type: "DENMARK_ABILITY", countryId: "dnk" });
     const forced = state.countries.find((c) => c.forcedChoice)!;
     const before = state.devChoices[forced.id];
@@ -253,7 +266,7 @@ describe("roomReducer orchestration", () => {
   });
 
   it("REQUEST_ABILITY queues the request and applying the ability clears it", () => {
-    let state = playing();
+    let state = representativeMeeting();
     state = applyRoomAction(state, { type: "REQUEST_ABILITY", countryId: "kor" });
     expect(state.abilityRequests).toEqual(["kor"]);
     state = applyRoomAction(state, { type: "KOREA_ABILITY", countryId: "kor", loserId: "usa" });
@@ -261,11 +274,11 @@ describe("roomReducer orchestration", () => {
   });
 
   it("GO_NEXT into a new turn clears pending ability requests", () => {
-    let state = playing();
+    let state = representativeMeeting();
     state = applyRoomAction(state, { type: "REQUEST_ABILITY", countryId: "swe" });
     expect(state.abilityRequests).toEqual(["swe"]);
     state = playTurn(state, "balanced");
-    expect(state.turn).toBe(2);
+    expect(state.turn).toBe(3);
     expect(state.abilityRequests).toEqual([]);
   });
 
@@ -301,7 +314,7 @@ describe("roomReducer orchestration", () => {
   });
 
   it("KOREA_ABILITY commits GP-5 to Korea and -5 to the loser plus -0.3 temperature", () => {
-    let state = playing();
+    let state = representativeMeeting();
     state = applyRoomAction(state, { type: "KOREA_ABILITY", countryId: "kor", loserId: "usa" });
     expect(state.countries.find((c) => c.id === "kor")!.gp).toBe(15 - 5);
     expect(state.countries.find((c) => c.id === "kor")!.abilityUsed).toBe(true);
@@ -310,14 +323,15 @@ describe("roomReducer orchestration", () => {
   });
 
   it("USA_ABILITY on non-turn-4 turns defers to pendingUsa, resolved with the quiz answer", () => {
-    let state = playing();
+    let state = representativeMeeting();
     state = applyRoomAction(state, { type: "USA_ABILITY", countryId: "usa" });
     expect(state.pendingUsa).toBe(true);
     expect(state.temperatureDeci).toBe(150); // no immediate effect
 
+    state = advanceToPhase(state, "dev_select");
     state = setAllDevChoices(state, "balanced");
     state = applyRoomAction(state, { type: "REVEAL" });
-    state = applyRoomAction(state, { type: "GO_NEXT" });
+    state = advanceToPhase(state, "quiz");
     const tempBeforeQuiz = state.temperatureDeci;
     state = applyRoomAction(state, { type: "SUBMIT_QUIZ_ANSWER", answer: false });
     expect(state.pendingUsa).toBe(false);
@@ -340,10 +354,11 @@ describe("roomReducer orchestration", () => {
   });
 
   it("SWEDEN_ABILITY resolves at REVEAL based on whether all 6 chose environment", () => {
-    let state = playing();
+    let state = representativeMeeting();
     state = applyRoomAction(state, { type: "SWEDEN_ABILITY", countryId: "swe" });
     expect(state.pendingSweden).toBe(true);
 
+    state = advanceToPhase(state, "dev_select");
     state = setAllDevChoices(state, "environment"); // sum=30 -> -0.2
     state = applyRoomAction(state, { type: "REVEAL" });
     expect(state.pendingSweden).toBe(false);
@@ -357,6 +372,7 @@ describe("roomReducer orchestration", () => {
     state = applyRoomAction(state, { type: "SUBMIT_QUIZ_ANSWER", answer: false });
     state = applyRoomAction(state, { type: "GO_NEXT" }); // turn2 nation_consult
     state = applyRoomAction(state, { type: "GO_NEXT" }); // turn2 representative_meeting
+    state = { ...state, temperatureDeci: 170 };
 
     state = applyRoomAction(state, { type: "JAPAN_ABILITY", countryId: "jpn" });
     for (const c of state.countries) {
@@ -365,19 +381,19 @@ describe("roomReducer orchestration", () => {
   });
 
   it("TUVALU_ABILITY moves GP from the donor and drops temperature only when a donor is given", () => {
-    let state = playing();
+    let state = representativeMeeting(180);
     const nullified = applyRoomAction(state, { type: "TUVALU_ABILITY", countryId: "tuv", donorId: null });
-    expect(nullified.temperatureDeci).toBe(150);
+    expect(nullified.temperatureDeci).toBe(180);
     expect(nullified.countries.find((c) => c.id === "tuv")!.gp).toBe(8 - 5); // ability cost still charged
 
     const donated = applyRoomAction(state, { type: "TUVALU_ABILITY", countryId: "tuv", donorId: "usa" });
-    expect(donated.temperatureDeci).toBe(150 - 4);
+    expect(donated.temperatureDeci).toBe(180 - 4);
     expect(donated.countries.find((c) => c.id === "usa")!.gp).toBe(18 - 10);
     expect(donated.countries.find((c) => c.id === "tuv")!.gp).toBe(8 - 5 + 10);
   });
 
   it("DENMARK_ABILITY forces the top-3-by-GP countries (with ties) for 2 turns", () => {
-    let state = playing();
+    let state = representativeMeeting(170);
     state = applyRoomAction(state, { type: "DENMARK_ABILITY", countryId: "dnk" });
     // gp: kor15 usa18 swe20 dnk20 jpn18 tuv8 -> top3 cutoff 18, ties usa/jpn included
     const forcedIds = state.countries.filter((c) => c.forcedChoice).map((c) => c.id).sort();
