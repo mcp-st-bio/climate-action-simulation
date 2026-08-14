@@ -5,6 +5,7 @@ import { useRoom, useTeamToken } from "@/lib/useRoom";
 import { useCountdown, formatTime } from "@/lib/useCountdown";
 import { CHOICE_GP_LABEL, CHOICE_LABEL, PHASE_LABEL } from "@/lib/labels";
 import QuizResult from "@/components/QuizResult";
+import StudentGuide from "@/components/StudentGuide";
 import {
   CountryId,
   DevChoice,
@@ -30,9 +31,10 @@ export default function TeamView({ code }: { code: string }) {
   if (!state || !token) {
     return <Centered>연결 중...</Centered>;
   }
+  const guide = <StudentGuide turn={state.turn} phaseIndex={state.phaseIndex} stage={state.stage} myCountryId={state.myCountryId} />;
 
   if (state.myTeamApproval.status === "none") {
-    return (
+    return (<>
       <main className="flex min-h-screen items-center justify-center p-5">
         <section className="w-full max-w-md space-y-4 rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <div className="text-center">
@@ -57,23 +59,25 @@ export default function TeamView({ code }: { code: string }) {
           {error && <p className="text-center text-sm text-red-400">{error}</p>}
         </section>
       </main>
-    );
+      {guide}
+    </>);
   }
 
   if (state.myTeamApproval.status === "pending") {
-    return (
+    return (<>
       <Centered>
         <span className="block text-center">
           <span className="block text-3xl">승인을 기다리고 있습니다</span>
           <span className="mt-3 block text-base font-normal text-slate-400">{state.myTeamApproval.nickname} · 선생님이 확인 중입니다.</span>
         </span>
       </Centered>
-    );
+      {guide}
+    </>);
   }
 
   // --- 대기 화면: 교사가 국가 선택을 열어줄 때까지 ---
   if (state.stage === "lobby") {
-    return (
+    return (<>
       <WaitingRoom
         code={code}
         connected={state.connectedCount}
@@ -81,14 +85,15 @@ export default function TeamView({ code }: { code: string }) {
         nickname={state.myTeamApproval.nickname ?? "우리 조"}
         seatNumber={state.myTeamApproval.seatNumber}
       />
-    );
+      {guide}
+    </>);
   }
 
   // --- 5초 카운트다운: 선착순이므로 모두 같은 순간에 열린다 ---
   // 서버 시각 기준으로 계산하므로 태블릿 시계가 틀어져 있어도 동시에 열린다.
   if (state.stage === "country_select" && state.countrySelectOpensAt !== null) {
     const msLeft = state.countrySelectOpensAt - (Date.now() + clockOffset);
-    if (msLeft > 0) return <SelectCountdown msLeft={msLeft} />;
+    if (msLeft > 0) return <><SelectCountdown msLeft={msLeft} />{guide}</>;
   }
 
   const myCountry = state.myCountryId
@@ -97,7 +102,7 @@ export default function TeamView({ code }: { code: string }) {
 
   // --- 국가 선택 (선점 방식) ---
   if (!myCountry) {
-    return (
+    return (<>
       <main className="mx-auto max-w-2xl space-y-4 p-4">
         <header>
           <h1 className="text-2xl font-black">우리 조의 나라를 고르세요</h1>
@@ -123,7 +128,8 @@ export default function TeamView({ code }: { code: string }) {
         </div>
         {error && <p className="text-red-400">{error}</p>}
       </main>
-    );
+      {guide}
+    </>);
   }
 
   const phase = getPhaseSequence(state.turn)[state.phaseIndex];
@@ -137,6 +143,7 @@ export default function TeamView({ code }: { code: string }) {
   const requested = state.abilityRequests.includes(myCountry.id);
 
   return (
+    <>
     <main className="mx-auto max-w-2xl space-y-4 p-4">
       <header className="rounded-xl border border-slate-800 bg-slate-900 p-4">
         <div className="flex items-center justify-between">
@@ -251,6 +258,8 @@ export default function TeamView({ code }: { code: string }) {
 
       {error && <p className="text-red-400">{error}</p>}
     </main>
+    {guide}
+    </>
   );
 }
 
